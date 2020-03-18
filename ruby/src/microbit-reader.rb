@@ -2,7 +2,25 @@ require 'serialport'
 require 'json'
 require "unimidi"
 
-PORT = '/dev/cu.usbmodem1434402'
+PORT = '/dev/cu.usbmodem1411402'
+
+files = Dir["/dev/cu.usbmodem*"]
+
+if files.length > 1
+  puts "What port is your Microbit on?\nChoose a number\n"
+  files.each_with_index do |f, index|
+    puts "#{index + 1}: #{f}"
+  end
+  choice = gets
+  choice = choice.chomp.to_i
+  exit
+  PORT = files[choice]
+else
+  PORT = files.first
+end
+
+puts "PORT: #{PORT}"
+
 BAUD = 115200
 
 serial = SerialPort.new(PORT, BAUD, 8, 1, SerialPort::NONE)
@@ -14,9 +32,13 @@ def print_exception(exception, explicit)
   puts exception.backtrace.join("\n")
 end
 
-def map180(value)
+map180 = lambda { |value|
   ((value * 1.0 + 180) * ( 127.0 / 360.0)).to_i
-end
+}
+
+map360 = lambda { |value|
+  ((value * 1.0) * ( 127.0 / 360.0)).to_i
+}
 
 midi_map = {
   cutoff: 16,
@@ -27,9 +49,9 @@ midi_map = {
 }
 
 control_map = {
-  roll: :cutoff,
-  compass: :resonance,
-  pitch: :distortion
+  roll: { cc: :cutoff, fn: map180 },
+  # compass: { cc: :resonance, fn: map360 }
+  pitch: { cc: :distortion, fn: map180 }
 }
 
 begin
@@ -42,16 +64,17 @@ begin
     
       control = control_map[name.to_sym]
       if control
-        cc = midi_map[control]
-        value = packet['v']
+        cc = midi_map[control[:cc]]
+        fn = control[:fn]
+        value = fn.call(packet['v'])
         
-        puts "#{control} = #{cc} : #{value} = #{map180(value)}"
+        puts "#{cc} (#{control[:cc]}) : #{packet['v']} = #{value}"
         output.puts(176, cc, value) 
       else
         if name.to_s == "input"
           puts "name! #{packet['v']}"
         # else
-          # puts "name: #{name} packet #{packet}"
+        #   puts "name: #{name} packet #{packet}"
         end
       end
     rescue JSON::ParserError => e
