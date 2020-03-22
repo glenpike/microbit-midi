@@ -1,10 +1,16 @@
 require 'serialport'
 require 'json'
 require "unimidi"
+require 'platform'
 
-PORT = '/dev/cu.usbmodem1411402'
+case Platform::IMPL
+when :linux
+  PORT_SEARCH = '/dev/ttyACM*'
+when :mac
+  PORT_SEARCH = '/dev/cu.usbmodem*'
+end
 
-files = Dir["/dev/cu.usbmodem*"]
+files = Dir[PORT_SEARCH]
 
 if files.length > 1
   puts "What port is your Microbit on?\nChoose a number\n"
@@ -25,6 +31,8 @@ BAUD = 115200
 
 serial = SerialPort.new(PORT, BAUD, 8, 1, SerialPort::NONE)
 
+UniMIDI::Output.all.each { |d| puts "#{d.inspect}" }
+
 output = UniMIDI::Output.gets
 
 def print_exception(exception, explicit)
@@ -41,8 +49,8 @@ map360 = lambda { |value|
 }
 
 midi_map = {
-  cutoff: 16,
-  resonance: 82,
+  cutoff: 74, #16,
+  resonance: 71, #82,
   modulation: 1,
   overdrive: 114,
   distortion: 94
@@ -50,7 +58,7 @@ midi_map = {
 
 control_map = {
   roll: { cc: :cutoff, fn: map180 },
-  # compass: { cc: :resonance, fn: map360 }
+  compass: { cc: :resonance, fn: map360 },
   pitch: { cc: :distortion, fn: map180 }
 }
 
@@ -61,15 +69,15 @@ begin
       packet = JSON.parse(line)
       # byebug
       name = packet['n']
-    
+
       control = control_map[name.to_sym]
       if control
         cc = midi_map[control[:cc]]
         fn = control[:fn]
         value = fn.call(packet['v'])
-        
+
         puts "#{cc} (#{control[:cc]}) : #{packet['v']} = #{value}"
-        output.puts(176, cc, value) 
+        output.puts(176, cc, value)
       else
         if name.to_s == "input"
           puts "name! #{packet['v']}"
