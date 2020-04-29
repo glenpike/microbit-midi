@@ -4,9 +4,11 @@
 
 radio.onReceivedValue(function (name, value) {
   radio.writeReceivedPacketToSerial()
+  led.toggle(0, 4)
 })
 radio.onReceivedString(function (receivedString) {
   radio.writeReceivedPacketToSerial()
+  led.toggle(4, 4)
 })
 basic.showIcon(IconNames.Pitchfork)
 radio.setGroup(1)

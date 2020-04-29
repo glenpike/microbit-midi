@@ -3,6 +3,8 @@ require 'json'
 require "unimidi"
 require 'platform'
 
+PORT_SEARCH = '/dev/cu.usbmodem*'
+
 case Platform::IMPL
 when :linux
   PORT_SEARCH = '/dev/ttyACM*'
@@ -75,9 +77,9 @@ begin
         cc = midi_map[control[:cc]]
         fn = control[:fn]
         value = fn.call(packet['v'])
-
+        
         puts "#{cc} (#{control[:cc]}) : #{packet['v']} = #{value}"
-        output.puts(176, cc, value)
+        output.puts(176, cc, value) 
       else
         if name.to_s == "input"
           puts "name! #{packet['v']}"
