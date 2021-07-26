@@ -44,8 +44,8 @@ end
 
 # -35 to 35
 mapRoll = lambda { |value|
-  min = -55
-  max = 55
+  min = -35
+  max = 35
   offset = 180
   input = [value, min].max
   input = [input, max].min
@@ -89,7 +89,7 @@ control_map_2 = {
 }
 
 note_map_1 = {
-  pitch: { fn: mapNotes, notes: notes_1 }
+  # pitch: { fn: mapNotes, notes: notes_1 }
 }
 
 note_map_2 = {
@@ -100,7 +100,7 @@ last_note = nil
 
 id_map = {
   1901794473 => {
-    channel: 0,
+    channel: 2,
     note_map: note_map_1,
     control_map: control_map_1,
     last_note: nil
