@@ -1,0 +1,158 @@
+require 'serialport'
+require 'json'
+require 'unimidi'
+require 'platform'
+require 'diamond'
+
+PORT_SEARCH = '/dev/cu.usbmodem*'
+
+case Platform::IMPL
+when :linux
+  PORT_SEARCH = '/dev/ttyACM*'
+when :mac
+  PORT_SEARCH = '/dev/cu.usbmodem*'
+end
+
+files = Dir[PORT_SEARCH]
+
+if files.length > 1
+  puts "What port is your Microbit on?\nChoose a number\n"
+  files.each_with_index do |f, index|
+    puts "#{index + 1}: #{f}"
+  end
+  choice = gets
+  choice = choice.chomp.to_i
+  PORT = files[choice]
+else
+  PORT = files.first
+end
+
+puts "PORT: #{PORT}"
+
+BAUD = 115_200
+
+serial = SerialPort.new(PORT, BAUD, 8, 1, SerialPort::NONE)
+
+UniMIDI::Output.all.each { |d| puts d.inspect.to_s }
+
+output = UniMIDI::Output.gets
+
+def print_exception(exception, explicit)
+  puts "[#{explicit ? 'EXPLICIT' : 'INEXPLICIT'}] #{exception.class}: #{exception.message}"
+  puts exception.backtrace.join("\n")
+end
+
+transpose = lambda { |value|
+  input = [[value, 0].max, 100].min
+  ((input.to_f / 101) * 8).to_i
+}
+
+note_map_1 = {
+  pitch: { fn: transpose }
+}
+
+last_note = nil
+
+id_map = {
+  1_901_794_473 => {
+    channel: 2,
+    note_map: note_map_1,
+    last_note: nil
+  },
+  1_689_304_789 => {
+    channel: 1,
+    note_map: note_map_1,
+    last_note: nil
+  }
+}
+id_map.each { |k, _v| puts "keys: '#{k}'" }
+# puts "id map: #{id_map[1_689_304_789].inspect}"
+
+options = {
+  gate: 90,
+  interval: 7,
+  midi: output,
+  pattern: 'UpDown',
+  range: 2,
+  rate: 16
+}
+arpeggiator = Diamond::Arpeggiator.new(options)
+clock = Diamond::Clock.new(138)
+
+clock << arpeggiator
+
+chord = %w[C3 G3 E3]
+
+arpeggiator.add(chord)
+puts 'starting clock'
+clock.start(focus: true)
+
+# Can't seem to use normal readline with threads as it blocks
+# This appears to be a ruby / Mac OSX problem, (https://redmine.ruby-lang.org/issues/5539)
+# but have installed readline with Brew and asdf ruby-build used this
+# https://github.com/asdf-vm/asdf-ruby/pull/5
+# Resolves problem, but we don't get any console output until we kill the program
+def readline_nonblock(io)
+  buffer = ''
+  buffer << io.read_nonblock(1) while buffer[-1] != "\n"
+
+  buffer
+rescue IO::EAGAINWaitReadable
+  IO.select([io])
+  retry
+end
+
+begin
+  loop do
+    line = readline_nonblock(serial)
+    begin
+      packet = JSON.parse(line)
+      # byebug
+      name = packet['n']
+
+      controller = id_map[packet['s'].to_i]
+      # puts " controller for '#{packet['s'].to_i}': #{controller.inspect}"
+      next unless controller
+
+      note_map = controller[:note_map]
+      channel = controller[:channel] || 0
+      note = note_map[name.to_sym]
+      if note
+        fn = note[:fn]
+        value = fn.call(packet['v'])
+        # puts "#{name} channel: #{channel} msg: #{0x90 + channel} note: #{packet['v']} = #{value}"
+        # output.puts(0x80 + channel, controller[:last_note], 0) if controller[:last_note]
+        if controller[:last_note] != value
+          # puts "#{name} channel: #{channel} msg: #{0x90 + channel} note: #{packet['v']} = #{value}"
+          # output.puts(0x90 + channel, value, 100)
+          arpeggiator.transpose = value
+          puts "arpeggiator.transpose #{arpeggiator.transpose}"
+          controller[:last_note] = value
+          clock.stop
+          clock.start(focus: true)
+        end
+
+      elsif name.to_s == 'input'
+        puts "name! #{packet['v']}"
+        # else
+        #   puts "name: #{name} packet #{packet}"
+      end
+    rescue JSON::ParserError => e
+      # puts "invalid packet: #{line}"
+      next
+    rescue NoMethodError
+      puts 'NoMethodError'
+      next
+    end
+  end
+rescue Interrupt => e
+  print_exception(e, true)
+rescue SignalException => e
+  print_exception(e, false)
+rescue StandardError => e
+  print_exception(e, false)
+end
+
+id_map.each do |c|
+  output.puts(0x80 + c[:channel], c[:last_note], 0) if c[:last_note]
+end
