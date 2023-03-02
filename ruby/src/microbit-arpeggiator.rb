@@ -103,41 +103,41 @@ rescue IO::EAGAINWaitReadable
 end
 
 def microbit_to_midi
-  printf "poo\n"
-  sleep 1
-  true
-  # line = readline_nonblock(serial)
-  # packet = JSON.parse(line)
-  # # byebug
-  # name = packet['n']
+  # printf "poo\n"
+  # sleep 1
+  # true
+  line = readline_nonblock(serial)
+  packet = JSON.parse(line)
+  # byebug
+  name = packet['n']
 
-  # controller = id_map[packet['s'].to_i]
-  # # printf " controller for '#{packet['s'].to_i}': #{controller.inspect}\n"
-  # return unless controller
+  controller = id_map[packet['s'].to_i]
+  # printf " controller for '#{packet['s'].to_i}': #{controller.inspect}\n"
+  return unless controller
 
-  # note_map = controller[:note_map]
-  # channel = controller[:channel] || 0
-  # note = note_map[name.to_sym]
-  # if note
-  #   fn = note[:fn]
-  #   value = fn.call(packet['v'])
-  #   # printf "#{name} channel: #{channel} msg: #{0x90 + channel} note: #{packet['v']} = #{value}\n"
-  #   # output.puts(0x80 + channel, controller[:last_note], 0) if controller[:last_note]
-  #   if controller[:last_note] != value
-  #     # printf "#{name} channel: #{channel} msg: #{0x90 + channel} note: #{packet['v']} = #{value}\n"
-  #     # output.puts(0x90 + channel, value, 100)
-  #     arpeggiator.transpose = value
-  #     printf "arpeggiator.transpose #{arpeggiator.transpose}\n"
-  #     controller[:last_note] = value
-  #     clock.stop
-  #     clock.start(focus: true)
-  #   end
+  note_map = controller[:note_map]
+  channel = controller[:channel] || 0
+  note = note_map[name.to_sym]
+  if note
+    fn = note[:fn]
+    value = fn.call(packet['v'])
+    # printf "#{name} channel: #{channel} msg: #{0x90 + channel} note: #{packet['v']} = #{value}\n"
+    # output.puts(0x80 + channel, controller[:last_note], 0) if controller[:last_note]
+    if controller[:last_note] != value
+      # printf "#{name} channel: #{channel} msg: #{0x90 + channel} note: #{packet['v']} = #{value}\n"
+      # output.puts(0x90 + channel, value, 100)
+      arpeggiator.transpose = value
+      printf "arpeggiator.transpose #{arpeggiator.transpose}\n"
+      controller[:last_note] = value
+      clock.stop
+      clock.start(focus: true)
+    end
 
-  # elsif name.to_s == 'input'
-  #   printf "name! #{packet['v']}\n"
-  #   # else
-  #   #   printf "name: #{name} packet #{packet}\n"
-  # end
+  elsif name.to_s == 'input'
+    printf "name! #{packet['v']}\n"
+    # else
+    #   printf "name: #{name} packet #{packet}\n"
+  end
 end
 @thread
 
